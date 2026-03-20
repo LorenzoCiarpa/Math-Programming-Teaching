@@ -6,7 +6,14 @@ import numpy as np
 
 # --- 1. Configurazione Scacchiera e Grafo ---
 N = 8  # Dimensione scacchiera 8x8
+CELLA_INIZIALE = (0, 0)  # Cella di partenza (riga, colonna), es. (0,0) = angolo in basso a sinistra
+
 nodi = [(r, c) for r in range(N) for c in range(N)]
+
+### Per ottenere soluzioni diverse, puoi modificare questa variabile (1 = prima soluzione, 2 = seconda soluzione, ecc.)
+# E devi impostare NO_GOOD_CUT = True
+NO_GOOD_CUT = False
+NUMERO_SOLUZIONE = 1
 
 def get_mosse_cavallo(r, c):
     """Restituisce le mosse valide del cavallo da una cella (r, c)"""
@@ -64,12 +71,29 @@ for n in nodi:
 
 m.Params.LazyConstraints = 1
 m._vars = x
-print("Cercando il percorso del cavallo... (può richiedere qualche secondo)")
-m.optimize(subtour_elim)
+
+
+if NO_GOOD_CUT: 
+    
+    print(f"Cercando la soluzione #{NUMERO_SOLUZIONE}... (può richiedere qualche secondo)")
+    for k in range(NUMERO_SOLUZIONE):
+        m.optimize(subtour_elim)
+        if m.status != GRB.OPTIMAL:
+            print(f"Nessuna ulteriore soluzione trovata dopo {k} soluzioni.")
+            break
+        if k < NUMERO_SOLUZIONE - 1:
+            # No-good cut: esclude la soluzione corrente e cerca la prossima
+            archi_scelti = [a for a in archi if x[a].X > 0.5]
+            m.addConstr(gp.quicksum(x[a] for a in archi_scelti) <= len(archi_scelti) - 1)
+            print(f"  Soluzione {k+1} trovata, cerco la prossima...")
+
+else:
+    print("Cercando il percorso del cavallo... (può richiedere qualche secondo)")
+    m.optimize(subtour_elim)
 
 # --- 4. Estrazione del Percorso ---
-percorso = [(0, 0)]
-curr = (0, 0)
+percorso = [CELLA_INIZIALE]
+curr = CELLA_INIZIALE
 for _ in range(len(nodi)):
     for nr, nc in get_mosse_cavallo(curr[0], curr[1]):
         if x[curr, (nr, nc)].X > 0.5:
